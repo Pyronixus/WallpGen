@@ -2,6 +2,7 @@
 
 :root {
   --bg: #1a1a1a;
+  --bg-img: url('../img/background-d.png');
   --bg-card: #151515;
   --bg-hover: #1e1e1e;
   --bg-nav: rgba(15, 15, 15, 0.85);

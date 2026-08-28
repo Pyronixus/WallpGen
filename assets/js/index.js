@@ -3,7 +3,7 @@ import {
   getLanguage,
   t,
   getAvailableLanguages,
-} from "./assets/js/translate.js";
+} from "./translate.js";
 
 function updateDOMText() {
   document.querySelectorAll("[data-translate]").forEach((el) => {
@@ -67,7 +67,7 @@ function applyTheme(isDark) {
     r.setProperty("--text", "#f0f0f0");
     r.setProperty("--text-muted", "#888");
     r.setProperty("--border", "#222");
-    r.setProperty("--bg-image", 'url("../assets/img/background-d.png")');
+    r.setProperty("--bg-img", 'url("../img/background-d.png")');
   } else {
     r.setProperty("--bg", "#f0f0f0");
     r.setProperty("--bg-card", "#ffffff");
@@ -76,7 +76,7 @@ function applyTheme(isDark) {
     r.setProperty("--text", "#111");
     r.setProperty("--text-muted", "#666");
     r.setProperty("--border", "#ddd");
-    r.setProperty("--bg-image", 'url("../assets/img/background-l.png")');
+    r.setProperty("--bg-img", 'url("../img/background-l.png")');
   }
 }
 
