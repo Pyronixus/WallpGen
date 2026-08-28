@@ -812,7 +812,6 @@ export async function exportWallpaper(
     downloadLink.href = blobUrl;
     downloadLink.download = outputFilename;
     downloadLink.click();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   }
 }
 
