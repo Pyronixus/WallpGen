@@ -41,12 +41,28 @@
     width: 100%;
     max-width: 480px;
     height: auto;
+    aspect-ratio: 16 / 9;
   }
 
   #previewMobile {
     width: 120px;
     height: auto;
+    aspect-ratio: 145 / 314;
   }
+}
+
+#previewDesktop {
+  width: 640px;
+  height: 360px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#previewMobile {
+  width: 145px;
+  height: 314px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .preview-area {

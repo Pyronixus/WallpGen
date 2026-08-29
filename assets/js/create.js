@@ -17,12 +17,31 @@ let randomSeed = (Math.random() * 10000) | 0;
 let isDarkMode = false;
 
 function renderPreview() {
-  const desktopCtx = document.getElementById("previewDesktop").getContext("2d");
-  const mobileCtx = document.getElementById("previewMobile").getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+
+  const desktopCanvas = document.getElementById("previewDesktop");
+  const mobileCanvas = document.getElementById("previewMobile");
+
+  const desktopCtx = desktopCanvas.getContext("2d");
+  const mobileCtx = mobileCanvas.getContext("2d");
+
+  const desktopWidth = 640;
+  const desktopHeight = 360;
+  const mobileWidth = 145;
+  const mobileHeight = 314;
+
+  desktopCanvas.width = desktopWidth * dpr;
+  desktopCanvas.height = desktopHeight * dpr;
+  mobileCanvas.width = mobileWidth * dpr;
+  mobileCanvas.height = mobileHeight * dpr;
+
+  desktopCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mobileCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   drawPattern(
     desktopCtx,
-    640,
-    360,
+    desktopWidth,
+    desktopHeight,
     selectedPattern,
     selectedPalette,
     randomSeed,
@@ -30,22 +49,30 @@ function renderPreview() {
   );
   drawPattern(
     mobileCtx,
-    145,
-    314,
+    mobileWidth,
+    mobileHeight,
     selectedPattern,
     selectedPalette,
     randomSeed,
     isDarkMode,
   );
+
   drawClockOverlay(
     desktopCtx,
-    640,
-    360,
+    desktopWidth,
+    desktopHeight,
     "desktop",
     selectedPalette,
     isDarkMode,
   );
-  drawClockOverlay(mobileCtx, 145, 314, "mobile", selectedPalette, isDarkMode);
+  drawClockOverlay(
+    mobileCtx,
+    mobileWidth,
+    mobileHeight,
+    "mobile",
+    selectedPalette,
+    isDarkMode,
+  );
 }
 
 // Initialize pattern grid

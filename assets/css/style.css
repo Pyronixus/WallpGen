@@ -2,10 +2,11 @@
 
 :root {
   --bg: #1a1a1a;
-  --bg-img: url('../img/background-d.png');
+  --bg-img: url('../img/background/background-d.webp');
   --bg-card: #151515;
   --bg-hover: #1e1e1e;
   --bg-nav: rgba(15, 15, 15, 0.85);
+  --bg-flag: url('../img/flags/US-flag.png');
   --text: #f0f0f0;
   --text-muted: #888;
   --accent: #fff;
@@ -626,7 +627,7 @@ button.nav-tab {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--bg-flag);
   cursor: pointer;
   transition: var(--transition);
   font-size: 12px;
