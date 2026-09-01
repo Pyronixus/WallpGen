@@ -1,4 +1,4 @@
-# ![icon](./assets/img/icons/icon-2000.webp) WallpGen — Wallpaper Generator
+# <img src="./assets/img/icons/icon-2000.webp" alt="icon" width="80" height="80" />  WallpGen — Wallpaper Generator
 
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0-blue?style=flat-square)](./LICENSE)
 

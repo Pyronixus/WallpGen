@@ -31,8 +31,10 @@ const PARSED_PALETTES = PALETTES.map(p => ({
 const PATTERNS = ["flowing-hills", "smooth-wave", "sand-dunes", "mountains", "concentric-arcs", "desert-dunes"];
 const PATTERN_LABELS = PATTERNS.map((p) => t(`pattern.${p}`));
 
-let globalSeed = 0;
 let globalSeedOffset = 0;
+
+// Buffer réutilisable pour éviter la création d'objets (Garbage Collection)
+const RIDGE_BUFFER = new Float32Array(2048);
 
 function mulberry32Hash(seed) {
   return function () {
@@ -44,15 +46,20 @@ function mulberry32Hash(seed) {
   };
 }
 
+// Bruit entier Ultra-Rapide (remplace Math.sin)
+function fastHash(x) {
+  let n = (x | 0) & 0xffff;
+  n = (n << 13) ^ n;
+  return (1.0 - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824) * 0.5 + 0.5;
+}
+
 function perlinNoise(x) {
   const integerPart = Math.floor(x);
   const fractionalPart = x - integerPart;
   const smoothstep = fractionalPart * fractionalPart * (3 - 2 * fractionalPart);
-  const basePhase = integerPart * 127.1 + globalSeedOffset;
-  const seedA = Math.sin(basePhase) * 43758.5453;
-  const seedB = Math.sin(basePhase + 127.1) * 43758.5453;
-  const valueA = seedA - Math.floor(seedA);
-  const valueB = seedB - Math.floor(seedB);
+  const basePhase = (integerPart + globalSeedOffset) | 0;
+  const valueA = fastHash(basePhase);
+  const valueB = fastHash(basePhase + 127);
   return valueA + (valueB - valueA) * smoothstep;
 }
 
@@ -77,7 +84,7 @@ function getPaletteColor(paletteIndex, normalization, isDarkMode) {
   const adjustedNorm = isDarkMode ? 1 - normalization : normalization;
   const colorIndex = adjustedNorm * (colors.length - 1);
   const floorIndex = colorIndex | 0;
-  
+
   if (floorIndex >= colors.length - 1) {
     const c = colors[colors.length - 1];
     return `rgb(${c.r},${c.g},${c.b})`;
@@ -95,51 +102,44 @@ function getBackgroundColor(paletteIndex, isDarkMode) {
   return `rgb(${c.r},${c.g},${c.b})`;
 }
 
-function drawPineTree(context, centerX, baseY, treeWidth, treeHeight, randomGenerator) {
-  context.save();
+// Dessin optimisé des sapins en une seule passe
+function drawPineTree(context, centerX, baseY, treeWidth, treeHeight, randomGenerator, isExport = false) {
   context.beginPath();
-  context.moveTo(centerX - treeWidth * 0.08, baseY);
-  context.lineTo(centerX - treeWidth * 0.08, baseY - treeHeight * 0.15);
-  context.lineTo(centerX + treeWidth * 0.08, baseY - treeHeight * 0.15);
-  context.lineTo(centerX + treeWidth * 0.08, baseY);
-  context.fill();
+  // Tronc
+  context.rect(centerX - treeWidth * 0.08, baseY - treeHeight * 0.15, treeWidth * 0.16, treeHeight * 0.15);
 
-  const segmentCount = 30;
+  const segmentCount = isExport ? 12 : 4;
   for (let i = 0; i < segmentCount; i++) {
     const progress = i / (segmentCount - 1);
-    const segmentHeight = treeHeight * 1;
-    const segmentTopY = baseY - treeHeight + segmentHeight * progress * 0.45;
-    const segmentBottomY = baseY - treeHeight + segmentHeight * (progress + 0.22);
+    const segmentTopY = baseY - treeHeight + treeHeight * progress * 0.45;
+    const segmentBottomY = baseY - treeHeight + treeHeight * (progress + 0.22);
     const segmentWidth = treeWidth * (0.25 + progress * 0.75);
-    
-    context.beginPath();
-    context.moveTo(centerX, segmentTopY);
     const leftJitter = (randomGenerator() - 0.5) * (treeWidth * 0.08);
     const rightJitter = (randomGenerator() - 0.5) * (treeWidth * 0.08);
+
+    context.moveTo(centerX, segmentTopY);
     context.lineTo(centerX - segmentWidth / 2 + leftJitter, segmentBottomY);
     context.lineTo(centerX + segmentWidth / 2 + rightJitter, segmentBottomY);
-    context.closePath();
-    context.fill();
   }
-  context.restore();
+  context.fill();
 }
 
-function drawFlowingHills(context, width, height, paletteIndex, randomGen, isDarkMode) {
+function drawFlowingHills(context, width, height, paletteIndex, randomGen, isDarkMode, isExport = false) {
   const layerCount = 5;
   const isDesktop = width > height;
-  const pixelStep = Math.max(4, (width / 120) | 0);
+  const pixelStep = isExport ? Math.max(2, (width / 300) | 0) : Math.max(6, (width / 80) | 0);
   const invWidth = 1 / width;
+  const octaves = isExport ? 8 : 3;
 
   for (let layerIndex = 0; layerIndex < layerCount; layerIndex++) {
     const layerFactor = (layerIndex + 1) / layerCount;
     const verticalSpacing = isDesktop ? 0.4 : 0.33;
     const layerBaseY = height * (0.5 + (layerIndex / layerCount) * verticalSpacing);
-    
+
     context.fillStyle = getPaletteColor(paletteIndex, layerFactor * 0.85 + 0.1, isDarkMode);
     context.beginPath();
     context.moveTo(0, height);
-    
-    let ridgePointsList = [];
+
     const freqMod = layerIndex * 4.5;
     const freqModHill = layerIndex * 2.1;
     const mountainHeight = isDesktop ? height * 0.32 : height * 0.12;
@@ -147,21 +147,23 @@ function drawFlowingHills(context, width, height, paletteIndex, randomGen, isDar
     const mountainOffset = isDesktop ? height * 0.12 : height * 0.05;
     const hillOffset = isDesktop ? height * 0.01 : height * 0.02;
 
+    let idx = 0;
     for (let pixelX = 0; pixelX <= width + pixelStep; pixelX += pixelStep) {
       const normalizedX = pixelX * invWidth;
       let pixelY;
-      
+
       if (layerIndex < 2) {
         const mountainFrequency = isDesktop ? 4.5 : 2.5;
-        pixelY = layerBaseY + fractionalBrownianMotion(normalizedX * mountainFrequency + freqMod, 10) * mountainHeight - mountainOffset;
+        pixelY = layerBaseY + fractionalBrownianMotion(normalizedX * mountainFrequency + freqMod, octaves) * mountainHeight - mountainOffset;
       } else {
         const hillFrequency = isDesktop ? 2.5 : 1.5;
-        pixelY = layerBaseY + fractionalBrownianMotion(normalizedX * hillFrequency + freqModHill, 8) * hillHeight - hillOffset;
+        pixelY = layerBaseY + fractionalBrownianMotion(normalizedX * hillFrequency + freqModHill, octaves) * hillHeight - hillOffset;
       }
-      ridgePointsList.push({ x: pixelX, y: pixelY });
+
+      if (idx < RIDGE_BUFFER.length) RIDGE_BUFFER[idx++] = pixelY;
       context.lineTo(pixelX, pixelY);
     }
-    
+
     context.lineTo(width, height);
     context.lineTo(0, height);
     context.closePath();
@@ -171,39 +173,39 @@ function drawFlowingHills(context, width, height, paletteIndex, randomGen, isDar
       const baseScale = isDesktop ? 0.045 + layerIndex * 0.004 : 0.12 + layerIndex * 0.004;
       const treeBaseWidth = (isDesktop ? height : width) * baseScale;
       const treeBaseHeight = treeBaseWidth * (1 + randomGen() * 0.2);
-      const horizontalStep = treeBaseWidth * 0.35;
-      
+      const horizontalStep = treeBaseWidth * (isExport ? 0.35 : 0.6);
+      const totalPoints = idx - 1;
+
       for (let plantX = 0; plantX <= width; plantX += horizontalStep) {
-        const pointIndex = ((plantX * invWidth) * (ridgePointsList.length - 1)) | 0;
-        const ridgePoint = ridgePointsList[pointIndex] || ridgePointsList[ridgePointsList.length - 1];
-        
-        let verticalRows;
-        if (isDesktop) verticalRows = layerIndex === 1 ? 3 : 5 + (layerCount - layerIndex);
-        else verticalRows = layerIndex === 1 ? 1 : 2 + (layerCount - layerIndex);
-        
+        const pointIndex = Math.min(totalPoints, Math.max(0, ((plantX * invWidth) * totalPoints) | 0));
+        const ridgeY = RIDGE_BUFFER[pointIndex];
+
+        let verticalRows = isDesktop ? (layerIndex === 1 ? 2 : 3) : (layerIndex === 1 ? 1 : 2);
+
         for (let rowIndex = 0; rowIndex < verticalRows; rowIndex++) {
           const rowVerticalOffset = rowIndex * (treeBaseHeight * 0.22);
-          const treeBottomY = ridgePoint.y + rowVerticalOffset;
+          const treeBottomY = ridgeY + rowVerticalOffset;
           if (treeBottomY > height + 20) continue;
-          
+
           const scaleMultiplier = isDesktop ? 0.65 + randomGen() * 1.1 : 0.8 + randomGen() * 0.4;
           const finalTreeWidth = treeBaseWidth * (isDesktop ? Math.min(scaleMultiplier, 1.1) : scaleMultiplier);
           const jitteredX = plantX + (randomGen() - 0.5) * (horizontalStep * 0.5);
-          
-          drawPineTree(context, jitteredX, treeBottomY, finalTreeWidth, treeBaseHeight * scaleMultiplier, randomGen);
+
+          drawPineTree(context, jitteredX, treeBottomY, finalTreeWidth, treeBaseHeight * scaleMultiplier, randomGen, isExport);
         }
       }
     }
   }
 }
 
-function drawSmoothWave(context, width, height, paletteIndex, randomGen, isDarkMode) {
-  const layerCount = 8 + ((randomGen() * 5) | 0);
+function drawSmoothWave(context, width, height, paletteIndex, randomGen, isDarkMode, isExport = false) {
+  const layerCount = 6 + ((randomGen() * 3) | 0);
   const waveCenter = width * (0.45 + randomGen() * 0.1);
   const waveBase = height * (0.75 + randomGen() * 0.08);
-  const samplingSteps = 120;
+  const samplingSteps = isExport ? 120 : 40;
   const invWidth = width / samplingSteps;
   const invHeight = 2 / height;
+  const octaves = isExport ? 3 : 2;
 
   for (let i = layerCount; i >= 0; i--) {
     const layerFactor = i / layerCount;
@@ -212,22 +214,22 @@ function drawSmoothWave(context, width, height, paletteIndex, randomGen, isDarkM
     const asymmetrySkew = randomGen() * 0.2 - 0.1;
     const noiseMod = i * 1.4;
     const invWaveSpread = 1 / waveSpread;
-    
+
     context.beginPath();
     context.moveTo(0, height);
     context.lineTo(0, waveBase + wavePeakHeight * 0.5);
-    
+
     for (let step = 0; step <= samplingSteps; step++) {
       const pixelX = step * invWidth;
       const distance = (pixelX - waveCenter) * invWaveSpread;
       const bellCurve = Math.exp(-distance * distance * 0.4);
       const asymmetryFactor = 1 + asymmetrySkew * distance;
       const waveDisplacement = bellCurve * wavePeakHeight * asymmetryFactor;
-      const microDetail = fractionalBrownianMotion(pixelX * invHeight + noiseMod, 3) * height * 0.008;
-      
+      const microDetail = fractionalBrownianMotion(pixelX * invHeight + noiseMod, octaves) * height * 0.008;
+
       context.lineTo(pixelX, waveBase - waveDisplacement + microDetail);
     }
-    
+
     context.lineTo(width, height);
     context.closePath();
     context.fillStyle = getPaletteColor(paletteIndex, 0.1 + (1 - layerFactor) * 0.8, isDarkMode);
@@ -235,11 +237,12 @@ function drawSmoothWave(context, width, height, paletteIndex, randomGen, isDarkM
   }
 }
 
-function drawSandDunes(context, width, height, paletteIndex, randomGen, isDarkMode) {
-  const layerCount = 7 + ((randomGen() * 5) | 0);
-  const step = Math.max(2, (width / 600) | 0);
+function drawSandDunes(context, width, height, paletteIndex, randomGen, isDarkMode, isExport = false) {
+  const layerCount = 6 + ((randomGen() * 3) | 0);
+  const step = isExport ? Math.max(2, (width / 600) | 0) : Math.max(8, (width / 100) | 0);
   const invHeight = 1 / height;
   const waveAmplitude = height * 0.05;
+  const octaves = isExport ? 3 : 2;
 
   for (let layerIndex = 0; layerIndex < layerCount; layerIndex++) {
     const layerFactor = (layerIndex + 1) / layerCount;
@@ -247,18 +250,18 @@ function drawSandDunes(context, width, height, paletteIndex, randomGen, isDarkMo
     const waveFrequency = 0.5 + randomGen() * 0.8;
     const wavePhase = randomGen() * 10;
     const noiseMod = layerIndex * 2.1;
-    
+
     context.beginPath();
     for (let pixelX = 0; pixelX <= width + step; pixelX += step) {
       const normalizedX = pixelX * invHeight;
       const sinusoidalWave = Math.sin(normalizedX * Math.PI * waveFrequency + wavePhase) * waveAmplitude;
-      const noiseDetail = fractionalBrownianMotion(normalizedX * 0.8 + noiseMod, 3) * waveAmplitude;
+      const noiseDetail = fractionalBrownianMotion(normalizedX * 0.8 + noiseMod, octaves) * waveAmplitude;
       const pixelY = duneBase + sinusoidalWave + noiseDetail;
-      
+
       if (pixelX === 0) context.moveTo(pixelX, pixelY);
       else context.lineTo(pixelX, pixelY);
     }
-    
+
     context.lineTo(width, height);
     context.lineTo(0, height);
     context.closePath();
@@ -267,18 +270,18 @@ function drawSandDunes(context, width, height, paletteIndex, randomGen, isDarkMo
   }
 }
 
-function drawMountains(context, width, height, paletteIndex, randomGen, isDarkMode) {
-  const layerCount = 5 + ((randomGen() * 3) | 0);
-  const step = Math.max(2, (width / 600) | 0);
+function drawMountains(context, width, height, paletteIndex, randomGen, isDarkMode, isExport = false) {
+  const layerCount = 4 + ((randomGen() * 2) | 0);
+  const step = isExport ? Math.max(2, (width / 600) | 0) : Math.max(8, (width / 100) | 0);
   const invHeight = 1 / height;
+  const octaves = isExport ? 3 : 2;
 
   for (let layerIndex = 0; layerIndex < layerCount; layerIndex++) {
     const layerFactor = (layerIndex + 1) / layerCount;
     const mountainBase = height * (0.55 + layerFactor * 0.35);
     const peakNumber = 2 + ((randomGen() * 2) | 0);
-    const randomOffset = randomGen() * 50;
-    const noiseMod = layerIndex * 2.3 + randomOffset;
-    
+    const noiseMod = layerIndex * 2.3 + randomGen() * 50;
+
     const mountainPeaks = [];
     for (let peakIndex = 0; peakIndex < peakNumber; peakIndex++) {
       const w = height * (0.6 + randomGen() * 0.6);
@@ -289,13 +292,13 @@ function drawMountains(context, width, height, paletteIndex, randomGen, isDarkMo
         invWidth: 1 / w
       });
     }
-    
+
     context.beginPath();
     context.moveTo(-2, height + 2);
-    
+
     for (let pixelX = -2; pixelX <= width + step + 2; pixelX += step) {
       let pixelY = mountainBase;
-      
+
       for (let i = 0; i < mountainPeaks.length; i++) {
         const peak = mountainPeaks[i];
         const distanceFromPeak = Math.abs(pixelX - peak.cx);
@@ -305,11 +308,11 @@ function drawMountains(context, width, height, paletteIndex, randomGen, isDarkMo
           pixelY = Math.min(pixelY, mountainBase - peakElevation);
         }
       }
-      
-      const microDetail = fractionalBrownianMotion(pixelX * invHeight * 1.5 + noiseMod, 3) * height * 0.008;
+
+      const microDetail = fractionalBrownianMotion(pixelX * invHeight * 1.5 + noiseMod, octaves) * height * 0.008;
       context.lineTo(pixelX, pixelY + microDetail);
     }
-    
+
     context.lineTo(width + step + 2, height + 2);
     context.closePath();
     context.fillStyle = getPaletteColor(paletteIndex, layerFactor * 0.8 + 0.12, isDarkMode);
@@ -321,29 +324,28 @@ function drawConcentricArcs(context, width, height, paletteIndex, randomGen, isD
   const maxRadius = height * 1.0;
   const centerOriginX = width * (0.45 + randomGen() * 0.1);
   const centerOriginY = height * 1.5;
-  const ringCount = 14 + ((randomGen() * 6) | 0);
+  const ringCount = 10 + ((randomGen() * 4) | 0);
   const invRingCount = 1 / ringCount;
-  
+
   for (let ringIndex = ringCount; ringIndex >= 0; ringIndex--) {
     const ringFactor = ringIndex * invRingCount;
     context.beginPath();
     context.arc(centerOriginX, centerOriginY, maxRadius * ringFactor, 0, Math.PI * 2);
-    context.closePath();
     context.fillStyle = getPaletteColor(paletteIndex, 0.1 + (1 - ringFactor) * 0.8, isDarkMode);
     context.fill();
   }
 }
 
 function drawDesertDunes(context, width, height, paletteIndex, randomGen, isDarkMode) {
-  for (let strokeIndex = 0; strokeIndex < 15; strokeIndex++) {
-    const strokeFactor = strokeIndex / 15;
+  for (let strokeIndex = 0; strokeIndex < 10; strokeIndex++) {
+    const strokeFactor = strokeIndex / 10;
     context.beginPath();
     let currentX = width * randomGen();
     let currentY = height * (0.5 + randomGen() * 0.5);
     context.moveTo(currentX, currentY);
-    
-    for (let segmentIndex = 0; segmentIndex < 10; segmentIndex++) {
-      currentX += (randomGen() - 0.5) * width * 1;
+
+    for (let segmentIndex = 0; segmentIndex < 6; segmentIndex++) {
+      currentX += (randomGen() - 0.5) * width;
       currentY += (randomGen() - 0.4) * height * 0.2;
       context.bezierCurveTo(
         width * randomGen(), height * (0.5 + randomGen() * 0.5),
@@ -361,7 +363,7 @@ export function drawClockOverlay(context, width, height, displayType, paletteInd
   const colors = PARSED_PALETTES[paletteIndex].colors;
   const c = isDarkMode ? colors[colors.length - 1] : colors[0];
   const luminance = (c.r * 299 + c.g * 587 + c.b * 114) / 1000;
-  
+
   context.fillStyle = luminance > 125 ? "rgba(0, 0, 0, 0.75)" : "rgba(255, 255, 255, 0.9)";
   context.textAlign = "center";
   context.textBaseline = "middle";
@@ -385,19 +387,18 @@ export function drawClockOverlay(context, width, height, displayType, paletteInd
   }
 }
 
-export function drawPattern(context, width, height, patternIndex, paletteIndex, randomSeedValue, isDarkMode = false) {
-  globalSeed = randomSeedValue;
-  globalSeedOffset = randomSeedValue * 0.01;
+export function drawPattern(context, width, height, patternIndex, paletteIndex, randomSeedValue, isDarkMode = false, isExport = false) {
+  globalSeedOffset = (randomSeedValue * 0.01) | 0;
   const randomNumberGenerator = mulberry32Hash(randomSeedValue);
-  
+
   context.fillStyle = getBackgroundColor(paletteIndex, isDarkMode);
   context.fillRect(0, 0, width, height);
 
   switch (PATTERNS[patternIndex]) {
-    case "flowing-hills": drawFlowingHills(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode); break;
-    case "smooth-wave": drawSmoothWave(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode); break;
-    case "sand-dunes": drawSandDunes(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode); break;
-    case "mountains": drawMountains(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode); break;
+    case "flowing-hills": drawFlowingHills(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode, isExport); break;
+    case "smooth-wave": drawSmoothWave(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode, isExport); break;
+    case "sand-dunes": drawSandDunes(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode, isExport); break;
+    case "mountains": drawMountains(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode, isExport); break;
     case "concentric-arcs": drawConcentricArcs(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode); break;
     case "desert-dunes": drawDesertDunes(context, width, height, paletteIndex, randomNumberGenerator, isDarkMode); break;
   }
@@ -407,7 +408,7 @@ export async function exportWallpaper(width, height, patternIndex, paletteIndex,
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = width;
   exportCanvas.height = height;
-  drawPattern(exportCanvas.getContext("2d"), width, height, patternIndex, paletteIndex, randomSeed, isDarkMode);
+  drawPattern(exportCanvas.getContext("2d"), width, height, patternIndex, paletteIndex, randomSeed, isDarkMode, true);
 
   const imageBlob = await new Promise((resolve) => exportCanvas.toBlob(resolve, "image/png"));
   const arrayBuffer = await imageBlob.arrayBuffer();

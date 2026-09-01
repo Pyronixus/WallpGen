@@ -107,11 +107,6 @@ canvas {
   transition: opacity 0.3s ease;
 }
 
-/* Controls Panel */
-.controls-panel {
-  opacity: 1;
-}
-
 .control-group {
   opacity: 1;
 }
@@ -250,10 +245,6 @@ canvas {
   transition: all 0.2s ease;
 }
 
-.language-btn:hover {
-  transform: rotate(15deg) scale(1.05);
-}
-
 .language-menu {
   animation: fadeInUp 0.25s ease-out;
 }
@@ -298,11 +289,6 @@ button {
 
 main, .controls-panel {
   transition: background-color 0.3s ease;
-}
-
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
 }
 
 /* ── Performance & Accessibility ── */
