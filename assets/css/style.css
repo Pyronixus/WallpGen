@@ -4,11 +4,14 @@
   --bg: #1a1a1a;
   --bg-img: url('../img/background/background-d.webp');
   --bg-card: #151515;
+  --bg-card-mb: #1e1e1e;
   --bg-hover: #1e1e1e;
   --bg-nav: rgba(15, 15, 15, 0.85);
   --bg-flag: url('../img/flags/US-flag.png');
   --text: #f0f0f0;
-  --text-muted: #888;
+  --text-muted: #000;
+  --text-muted-sh: #222;
+  --mba: #1e1e1e;
   --accent: #fff;
   --border: #222;
   --radius: 16px;

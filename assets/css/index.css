@@ -213,8 +213,7 @@
   color: var(--text);
 }
 .mode-btn.active {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--mba);
   border-color: var(--text);
 }
 
@@ -324,7 +323,7 @@
 
 .size-hint {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-muted-sh);
   text-align: center;
   margin-top: -4px;
 }

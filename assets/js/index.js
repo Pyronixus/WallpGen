@@ -66,7 +66,9 @@ function applyTheme(isDark) {
     r.setProperty("--bg-hover", "#1e1e1e");
     r.setProperty("--bg-nav", "rgba(15,15,15,0.85)");
     r.setProperty("--text", "#f0f0f0");
-    r.setProperty("--text-muted", "#888");
+    r.setProperty("--text-muted", "#fff");
+    r.setProperty("--text-muted-sh", "#222");
+    r.setProperty("--mba", "#1e1e1e");
     r.setProperty("--border", "#222");
   } else {
     r.setProperty("--bg", "#f0f0f0");
@@ -75,7 +77,9 @@ function applyTheme(isDark) {
     r.setProperty("--bg-hover", "#e4e4e4");
     r.setProperty("--bg-nav", "rgba(240,240,240,0.85)");
     r.setProperty("--text", "#111");
-    r.setProperty("--text-muted", "#666");
+    r.setProperty("--text-muted", "#000");
+    r.setProperty("--text-muted-sh", "#d2d2d2");
+    r.setProperty("--mba", "#f0f0f0");
     r.setProperty("--border", "#ddd");
   }
 }
